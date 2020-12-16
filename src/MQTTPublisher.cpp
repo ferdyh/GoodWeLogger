@@ -21,11 +21,6 @@ bool MQTTPublisher::reconnect()
 {
 	lastConnectionAttempt = millis();
 
-	debugPrint("Attempting MQTT connection to server: ");
-	debugPrint(mqttSettings->mqttHostName);
-	debugPrintln("...");
-
-
 	// Create a random client ID
 	String clientId = "GoodWeLogger-";
 	clientId += String(random(0xffff), HEX);
@@ -34,29 +29,19 @@ bool MQTTPublisher::reconnect()
 	bool clientConnected;
 	if (mqttSettings->mqttUserName.length())
 	{
-		debugPrintln("Using user credientials for authentication.");
 		clientConnected = client.connect(clientId.c_str(), mqttSettings->mqttUserName.c_str(), mqttSettings->mqttPassword.c_str());
 	}
 	else
 	{
-		debugPrintln("Connecting without user credentials.");
 		clientConnected = client.connect(clientId.c_str());
 	}
 
 	if (clientConnected)
 	{
-		debugPrintln("connected");
 		// Once connected, publish an announcement...
 		client.publish("goodwe", "online");
 
 		return true;
-	}
-	else {
-
-
-		debugPrint("failed, rc=");
-		debugPrint(client.state());
-
 	}
 
 	return false;
@@ -68,10 +53,8 @@ void MQTTPublisher::start()
 	mqttSettings = mqttSettingsManager->GetSettings();
 	if (mqttSettings->mqttHostName.length() == 0 || mqttSettings->mqttPort == 0)
 	{
-		debugPrintln("MQTT disabled. No hostname or port set.");
 		return; //not configured
 	}
-	debugPrintln("MQTT enabled. Connecting.");
 	client.setServer(mqttSettings->mqttHostName.c_str(), mqttSettings->mqttPort);
 	reconnect(); //connect right away
 	isStarted = true;
@@ -104,10 +87,6 @@ void MQTTPublisher::handle()
 		for (char cnt = 0; cnt < inverters.size(); cnt++)
 		{
 			auto prependTopic = (String("goodwe/") + String(inverters[cnt].serialNumber));
-
-			debugPrint("Publishing prepend topic for this inverter is: ");
-			debugPrintln(prependTopic);
-
 
 			//send values when offline or online since the values can be reset when offline
 			if (sendQuick)
@@ -158,11 +137,6 @@ void MQTTPublisher::handle()
 			lastSentQuickUpdate = millis();
 		if (sendRegular)
 			lastSentRegularUpdate = millis();
-
-
-		debugPrint("MQTT send status: ");
-		debugPrintln(sendOk);
-
 	}
 }
 
@@ -172,4 +146,3 @@ bool MQTTPublisher::publishOnMQTT(String prepend, String topic, String value)
 	yield();
 	return retVal;
 }
-

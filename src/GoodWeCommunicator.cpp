@@ -27,8 +27,6 @@ void GoodWeCommunicator::start()
 		sendRemoveRegistration(cnt);
 		delay(1);
 	}
-
-	debugPrintln("GoodWe Communicator started.");
 }
 
 void GoodWeCommunicator::stop()
@@ -40,8 +38,6 @@ void GoodWeCommunicator::stop()
 
 int GoodWeCommunicator::sendData(char address, char controlCode, char functionCode, char dataLength, char* data)
 {
-	debugPrint("Sending data to inverter(s).");
-
 	//need to send out the crc which is the addition of all previous values. Calculate the address first
 	int16_t crc = 0;
 	
@@ -70,35 +66,11 @@ int GoodWeCommunicator::sendData(char address, char controlCode, char functionCo
 	goodweSerial->write(high);
 	goodweSerial->write(low);
 
-	//log everything too
-	debugPrintln("Sent data to inverter(s):");
-	
-	for (int cnt = 0; cnt < 7; cnt++)
-		debugPrintHex(headerBuffer[cnt]);
-
-	for (int cnt = 0; cnt < dataLength; cnt++)
-		debugPrintHex(data[cnt]);
-
-
-	debugPrint("CRC high/low: ");
-	debugPrintHex(high);
-	debugPrintHex(low);
-	debugPrintln(".");
-
 	return 7 + dataLength + 2; //header, data, crc
-}
-
-void GoodWeCommunicator::debugPrintHex(char bt)
-{
-	debugPrint("0x");
-	debugPrintBase(bt, HEX);
-	debugPrint(" ");
 }
 
 void GoodWeCommunicator::sendDiscovery()
 {
-	//send out discovery for unregistered devices.
-	debugPrintln("Sending discovery");
 	sendData(0x7F, 0x00, 0x00, 0x00, nullptr);
 }
 
@@ -111,10 +83,6 @@ void GoodWeCommunicator::checkOfflineInverters()
 		if (inverters[index].isOnline && !newOnline)
 		{
 			//check if inverter timed out
-
-			debugPrint("Marking inverter @ address: ");
-			debugPrint((short)inverters[index].address);
-			debugPrintln("offline.");
 
 			sendRemoveRegistration(inverters[index].address); //send in case the inverter thinks we are online
 			inverters[index].isOnline = inverters[index].addressConfirmed = false;
@@ -196,7 +164,6 @@ void GoodWeCommunicator::checkIncomingData()
 	{
 		//there is an open packet timeout. 
 		startPacketReceived = false; //wait for start packet again
-		debugPrintln("Comms timeout.");
 	}
 }
 void GoodWeCommunicator::parseIncomingData(char incomingDataLength) //
@@ -204,16 +171,6 @@ void GoodWeCommunicator::parseIncomingData(char incomingDataLength) //
 	//first check the crc
 	//Data always start without the start bytes of 0xAA 0x55
 	//incomingDataLength also has the crc data in it
-
-	debugPrint("Parsing incoming data with length: ");
-	debugPrintHex(incomingDataLength);
-	debugPrint(". ");
-	debugPrintHex(0xAA);
-	debugPrintHex(0x55);
-	for (char cnt = 0; cnt < incomingDataLength; cnt++)
-		debugPrintHex(inputBuffer[cnt]);
-	debugPrintln(".");
-
 	int16_t crc = 0xAA + 0x55;
 	for (char cnt = 0; cnt < incomingDataLength - 2; cnt++)
 		crc += inputBuffer[cnt];
@@ -221,19 +178,9 @@ void GoodWeCommunicator::parseIncomingData(char incomingDataLength) //
 	auto high = (crc >> 8) & 0xff;
 	auto low = crc & 0xff;
 
-
-	debugPrint("CRC received: ");
-	debugPrintHex(inputBuffer[incomingDataLength - 2]);
-	debugPrintHex(inputBuffer[incomingDataLength - 1]);
-	debugPrint(", calculated CRC: ");
-	debugPrintHex(high);
-	debugPrintHex(low);
-	debugPrintln(".");
-
 	//match the crc
 	if (!(high == inputBuffer[incomingDataLength - 2] && low == inputBuffer[incomingDataLength - 1]))
 		return;
-	debugPrintln("CRC match.");
 
 	//check the contorl code and function code to see what to do
 	if (inputBuffer[2] == 0x00 && inputBuffer[3] == 0x80)
@@ -264,8 +211,6 @@ void GoodWeCommunicator::handleRegistration(char* serialNumber, char length)
 		//check inverter 
 		if (memcmp(inverters[index].serialNumber, serialNumber, 16) == 0)
 		{
-			debugPrint("Already registered inverter reregistered with address: ");
-			debugPrintln((short)inverters[index].address);
 			//found it. Set to unconfirmed and send out the existing address to the inverter
 			inverters[index].addressConfirmed = false;
 			inverters[index].lastSeen = millis();
@@ -288,33 +233,18 @@ void GoodWeCommunicator::handleRegistration(char* serialNumber, char length)
 	newInverter.address = lastUsedAddress;
 	inverters.push_back(newInverter);
 
-	debugPrint("New inverter found. Current # registrations: ");
-	debugPrintln(inverters.size());
-
-
 	sendAllocateRegisterAddress(serialNumber, lastUsedAddress);
 }
 
 void GoodWeCommunicator::handleRegistrationConfirmation(char address)
 {
-	debugPrint("Handling registration information for address: ");
-	debugPrintln((short)address);
-
 	//lookup the inverter and set it to confirmed
 	auto inverter = getInverterInfoByAddress(address);
 	if (inverter)
 	{
-		debugPrintln("Inverter information found in list of inverters.");
 		inverter->addressConfirmed = true;
 		inverter->isOnline = false; //inverter is online, but we first need to get its information
 		inverter->lastSeen = millis();
-	}
-	else
-	{
-		debugPrint("Error. Could not find the inverter with address: ");
-		debugPrintln((short)address);
-		debugPrint("Current # registrations: ");
-		debugPrintln(inverters.size());
 	}
 	//get the information straight away
 	askInverterForInformation(address);
@@ -376,18 +306,6 @@ void GoodWeCommunicator::askAllInvertersForInformation()
 	{
 		if (inverters[index].addressConfirmed && inverters[index].isOnline)
 			askInverterForInformation(inverters[index].address);
-		else
-		{
-
-			debugPrint("Not asking inverter with address: ");
-			debugPrint((short)inverters[index].address);
-			debugPrint(" for information. Addressconfirmed: ");
-			debugPrint((short)inverters[index].addressConfirmed);
-			debugPrint(", isOnline: ");
-			debugPrint((short)inverters[index].isOnline);
-			debugPrintln(".");
-
-		}
 
 		yield();
 	}
@@ -411,11 +329,6 @@ GoodWeCommunicator::GoodweInverterInformation* GoodWeCommunicator::getInverterIn
 
 void GoodWeCommunicator::sendAllocateRegisterAddress(char* serialNumber, char address)
 {
-
-	debugPrint("SendAllocateRegisterAddress address: ");
-	debugPrintln((short)address);
-
-
 	//create our registrationpacket with serialnumber and address and send it over
 	char RegisterData[17];
 	memcpy(RegisterData, serialNumber, 16);
